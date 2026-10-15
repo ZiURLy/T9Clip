@@ -40,7 +40,9 @@ final class OtpNotifier {
             int n = XposedBridge.hookAllMethods(service, "enqueueNotificationInternal", new XC_MethodHook() {
                 protected void beforeHookedMethod(XC_MethodHook.MethodHookParam p) {
                     try {
-                        onNotification(p.args);
+                        if (onNotification(p.args)) {
+                            p.setResult(null); // verification-code message: do not show the notification
+                        }
                     } catch (Throwable t) {
                         L.e("验证码：处理通知失败", t);
                     }
@@ -52,9 +54,10 @@ final class OtpNotifier {
         }
     }
 
-    private static void onNotification(Object[] args) throws Throwable {
+    /** Returns true when the notification held a verification code and has been handled. */
+    private static boolean onNotification(Object[] args) throws Throwable {
         if (args == null || args.length == 0 || !MESSAGES.equals(args[0])) {
-            return;
+            return false;
         }
         Notification notification = null;
         for (Object a : args) {
@@ -64,25 +67,25 @@ final class OtpNotifier {
             }
         }
         if (notification == null || notification.extras == null) {
-            return;
+            return false;
         }
         long[] when = new long[1];
         String text = latestText(notification, when);
         if (text == null) {
-            return;
+            return false;
         }
         long now = System.currentTimeMillis();
         if (when[0] > 0 && now - when[0] > MAX_AGE_MS) {
-            return;
+            return false;
         }
         String code = extractCode(text);
         if (code == null) {
-            return;
+            return false;
         }
         String key = code + "@" + when[0];
         synchronized (OtpNotifier.class) {
             if (key.equals(lastKey)) {
-                return;
+                return true; // the same message posted again
             }
             lastKey = key;
         }
@@ -91,8 +94,16 @@ final class OtpNotifier {
         Context context = (Context) activityThread.getMethod("getSystemContext").invoke(thread);
         Intent intent = new Intent(ACTION).setPackage(IME).putExtra(EXTRA_CODE, code);
         intent.addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
-        context.sendBroadcast(intent);
-        L.i("收到验证码短信，已交给输入法");
+        // We are on a binder thread serving Google Messages; without this the broadcast
+        // would be sent with that app's identity and the permission check would reject it.
+        long token = android.os.Binder.clearCallingIdentity();
+        try {
+            context.sendBroadcast(intent);
+        } finally {
+            android.os.Binder.restoreCallingIdentity(token);
+        }
+        L.i("收到验证码短信，已交给输入法，通知不再显示");
+        return true;
     }
 
     /** The newest message in the notification, or null. */
