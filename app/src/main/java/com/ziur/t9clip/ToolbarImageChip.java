@@ -32,6 +32,8 @@ final class ToolbarImageChip {
     private static int originalWidth;
     private static int requestGeneration;
     private static ImageSender.ClipImage shown;
+    private static String shownCode;
+    private static Bitmap codeIcon;
     private static Views views;
     private static WeakReference<InputMethodService> serviceRef = new WeakReference<>(null);
     private static WeakReference<Object> barRef = new WeakReference<>(null);
@@ -120,6 +122,7 @@ final class ToolbarImageChip {
     private static void onServiceCreated(InputMethodService inputMethodService) {
         ClipboardManager clipboardManager;
         serviceRef = new WeakReference<>(inputMethodService);
+        OtpReceiver.register(inputMethodService);
         if (clipListener == null && (clipboardManager = (ClipboardManager) inputMethodService.getApplicationContext().getSystemService("clipboard")) != null) {
             ClipboardManager.OnPrimaryClipChangedListener onPrimaryClipChangedListener = new ClipboardManager.OnPrimaryClipChangedListener() {
                 @Override
@@ -154,6 +157,13 @@ final class ToolbarImageChip {
         try {
             InputMethodService inputMethodServiceService = service();
             if (inputMethodServiceService == null) {
+                return;
+            }
+            String code = otpCode(inputMethodServiceService);
+            if (code != null) {
+                if (!code.equals(shownCode) && suggestionEnabled()) {
+                    showCode(code);
+                }
                 return;
             }
             final ImageSender.ClipImage clipImageCurrent = ImageSender.current(inputMethodServiceService);
@@ -224,6 +234,7 @@ final class ToolbarImageChip {
             return;
         }
         shown = null;
+        shownCode = null;
         Views views2 = views;
         if (views2 != null) {
             views2.icon.setImageDrawable(originalIcon);
@@ -247,12 +258,76 @@ final class ToolbarImageChip {
     }
 
     private static void onTap() {
+        if (shownCode != null) {
+            InputMethodService ime = service();
+            String code = shownCode;
+            if (ime != null && ime.getCurrentInputConnection() != null) {
+                ime.getCurrentInputConnection().commitText(code, 1);
+                ImageSender.clearClipboard(ime);
+            } else if (ime != null) {
+                ImageSender.toast(ime, "现在没有可输入的地方");
+                return;
+            }
+            restore(true);
+            return;
+        }
         ImageSender.ClipImage clipImage = shown;
         InputMethodService inputMethodServiceService = service();
         if (clipImage != null && inputMethodServiceService != null) {
             ImageSender.send(inputMethodServiceService, clipImage.uri, clipImage.mime);
         }
         restore(true);
+    }
+
+    /** The verification code currently on the clipboard (copied by this module), or null. */
+    private static String otpCode(Context context) {
+        try {
+            ClipboardManager cm = (ClipboardManager) context.getSystemService("clipboard");
+            ClipData clip = cm == null ? null : cm.getPrimaryClip();
+            if (clip == null || clip.getItemCount() == 0 || clip.getDescription() == null) {
+                return null;
+            }
+            if (!OtpReceiver.LABEL.contentEquals(String.valueOf(clip.getDescription().getLabel()))) {
+                return null;
+            }
+            CharSequence text = clip.getItemAt(0).getText();
+            if (text == null || !text.toString().matches("[0-9A-Za-z]{4,8}")) {
+                return null;
+            }
+            return text.toString();
+        } catch (Throwable unused) {
+            return null;
+        }
+    }
+
+    private static Bitmap codeIcon(Context context) {
+        if (codeIcon == null) {
+            int size = ImageSender.dp(context, 30.0f) * 2;
+            Bitmap bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+            android.graphics.Canvas canvas = new android.graphics.Canvas(bmp);
+            android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+            paint.setColor(0xFF3B82F6);
+            canvas.drawRoundRect(0, 0, size, size, size * 0.2f, size * 0.2f, paint);
+            paint.setColor(0xFFFFFFFF);
+            paint.setTextAlign(android.graphics.Paint.Align.CENTER);
+            paint.setTextSize(size * 0.6f);
+            paint.setFakeBoldText(true);
+            canvas.drawText("码", size / 2f, size / 2f - (paint.ascent() + paint.descent()) / 2f, paint);
+            codeIcon = bmp;
+        }
+        return codeIcon;
+    }
+
+    private static void showCode(String code) {
+        Object obj = barRef.get();
+        Views views2 = obj == null ? null : views(obj);
+        if (views2 == null) {
+            return;
+        }
+        ImageSender.ClipImage marker = new ImageSender.ClipImage(android.net.Uri.parse("t9clip:otp"), "text/plain", false, System.currentTimeMillis());
+        show(marker, codeIcon(views2.icon.getContext()));
+        views2.text.setText(code);
+        shownCode = code;
     }
 
     private static void onLongPress() {

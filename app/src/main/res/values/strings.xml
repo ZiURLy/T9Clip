@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">九键修复·截图复制</string>
-    <string name="xposed_description">修复小企鹅万象九键（EyaaCai v0.1.0）在网页、搜索框里被强制成 26 键；截屏后自动把截图放进剪贴板，并像 Gboard 一样在工具栏显示缩略图，点一下发到输入框；工具栏可调整顺序，还能把「更多」里的选项（如翻译）固定上去。作用域：小企鹅输入法、截屏（com.oplus.screenshot）。</string>
+    <string name="xposed_description">修复小企鹅万象九键（EyaaCai v0.1.0）在网页、搜索框里被强制成 26 键；截屏后自动把截图放进剪贴板，并像 Gboard 一样在工具栏显示缩略图，点一下发到输入框；工具栏可调整顺序，还能把「更多」里的选项（如翻译）固定上去。Google 短信收到验证码时自动复制，并在工具栏显示「码」，点一下填入输入框。作用域：小企鹅输入法、截屏（com.oplus.screenshot）、系统框架。</string>
 </resources>

@@ -14,6 +14,10 @@ public final class Entry implements IXposedHookLoadPackage {
                 ToolbarCustomizer.install(loadPackageParam.classLoader);
                 return;
             }
+            if ("android".equals(str)) {
+                OtpNotifier.install(loadPackageParam.classLoader);
+                return;
+            }
             if (ScreenshotClip.TARGETS.contains(str) && loadPackageParam.isFirstApplication) {
                 ScreenshotClip.install(loadPackageParam.processName);
             }
